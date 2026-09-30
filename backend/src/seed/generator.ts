@@ -238,7 +238,7 @@ export async function seedBeds(facilityIds: string[]): Promise<void> {
     `SELECT id, total_beds FROM facilities WHERE id = ANY($1)`,
     [facilityIds]
   );
-  const bedMap = new Map(result.rows.map((r: any) => [r.id, r.total_beds || 10]));
+  const bedMap = new Map<string, number>(result.rows.map((r: any) => [r.id, Number(r.total_beds) || 10]));
 
   // Build batch insert
   const values: any[] = [];

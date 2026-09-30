@@ -93,7 +93,7 @@ export async function identifyDeficitsAndSurpluses(burnRateData: BurnRateData[])
   const facilitiesResult = await query(
     'SELECT id, name, district, state, latitude, longitude FROM facilities'
   );
-  const facilityMap = new Map(
+  const facilityMap = new Map<string, any>(
     facilitiesResult.rows.map((f: any) => [f.id, f])
   );
 
