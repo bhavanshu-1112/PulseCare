@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: pulsecare-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server.js --simulate
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_MODEL_FALLBACK_1
+        value: gemini-2.5-flash-lite
+      - key: GEMINI_MODEL_FALLBACK_2
+        value: gemini-3.8-flash
+      - key: SIMULATION_INTERVAL_MS
+        value: "5000"
+      - key: SEED_FACILITY_COUNT
+        value: "25"
