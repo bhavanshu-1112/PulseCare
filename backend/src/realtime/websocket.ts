@@ -4,7 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import { redis, STREAMS } from '../redis/client';
+import { redis, STREAMS, isRedisAvailable, registerDirectBroadcastListener } from '../redis/client';
 import Redis from 'ioredis';
 
 interface ConnectedClient {
@@ -17,6 +17,39 @@ interface ConnectedClient {
 }
 
 const clients: Map<string, ConnectedClient> = new Map();
+
+/**
+ * Broadcast a message to all connected WebSocket clients.
+ */
+export function broadcast(message: Record<string, any>): void {
+  const payload = JSON.stringify(message);
+  for (const [, client] of clients) {
+    try {
+      if (client.socket.readyState === 1) { // OPEN
+        client.socket.send(payload);
+      }
+    } catch (err) {
+      console.error(`Error sending to client ${client.id}:`, err);
+    }
+  }
+}
+
+// Register direct in-memory broadcast for when Redis streams are not used
+registerDirectBroadcastListener((stream, data) => {
+  let updateType = 'unknown';
+  if (stream.includes('stock')) updateType = 'stock';
+  else if (stream.includes('bed')) updateType = 'bed';
+  else if (stream.includes('attendance')) updateType = 'attendance';
+  else if (stream.includes('alert')) updateType = 'alert';
+
+  broadcast({
+    type: 'update',
+    updateType,
+    stream,
+    data,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 export function setupWebSocket(fastify: FastifyInstance): void {
   fastify.get('/ws', { websocket: true }, (socket, req) => {
@@ -57,32 +90,35 @@ export function setupWebSocket(fastify: FastifyInstance): void {
 }
 
 /**
- * Broadcast a message to all connected WebSocket clients.
- */
-function broadcast(message: Record<string, any>): void {
-  const payload = JSON.stringify(message);
-  for (const [, client] of clients) {
-    try {
-      if (client.socket.readyState === 1) { // OPEN
-        client.socket.send(payload);
-      }
-    } catch (err) {
-      console.error(`Error sending to client ${client.id}:`, err);
-    }
-  }
-}
-
-/**
  * Start consuming Redis streams and forwarding to WebSocket clients.
  */
 export async function startStreamConsumer(): Promise<void> {
-  // Create a separate Redis connection for blocking reads
-  const streamReader = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-  });
+  const redisUrl = process.env.REDIS_URL;
+  if (!isRedisAvailable() || !redisUrl || !redisUrl.trim()) {
+    console.log('ℹ  Stream consumer: Redis not configured, running with direct WebSocket telemetry');
+    return;
+  }
 
-  await streamReader.connect();
+  let streamReader: Redis;
+  try {
+    streamReader = new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        return 2000;
+      },
+    });
+
+    streamReader.on('error', () => {
+      // Prevent unhandled error event
+    });
+
+    await streamReader.connect();
+  } catch (err: any) {
+    console.warn(`⚠️  Could not connect stream reader (${err.message}) — running with direct WebSocket telemetry`);
+    return;
+  }
 
   const streamNames = Object.values(STREAMS);
   const lastIds: Record<string, string> = {};

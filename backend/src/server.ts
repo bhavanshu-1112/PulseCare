@@ -61,12 +61,16 @@ async function main() {
     console.log('╚═══════════════════════════════════════════╝\n');
 
     // ─── Connect to Redis (optional) ─────────────────────
-    console.log('Connecting to Redis...');
-    try {
-      await redis.connect();
-      console.log('✅ Redis connected\n');
-    } catch (err: any) {
-      console.warn(`⚠️  Redis unavailable (${err.message}) — running without real-time features\n`);
+    if (isRedisAvailable()) {
+      console.log('Connecting to Redis...');
+      try {
+        await redis.connect();
+        console.log('✅ Redis connected\n');
+      } catch (err: any) {
+        console.warn(`⚠️  Redis unavailable (${err.message}) — running with direct WebSocket telemetry\n`);
+      }
+    } else {
+      console.log('ℹ  No REDIS_URL configured — running with direct in-memory WebSocket telemetry\n');
     }
 
     // ─── Database Setup ──────────────────────────────────
@@ -93,7 +97,7 @@ async function main() {
     console.log(`\n🚀 Server running on http://localhost:${PORT}`);
     console.log(`   WebSocket: ws://localhost:${PORT}/ws`);
     console.log(`   Health: http://localhost:${PORT}/api/health`);
-    console.log(`   Redis: ${isRedisAvailable() ? '✅ connected' : '⚠️  unavailable (no live updates)'}\n`);
+    console.log(`   Redis: ${isRedisAvailable() ? '✅ connected' : 'ℹ  direct WebSockets (no Redis required)'}\n`);
 
     // ─── Start Stream Consumer (if Redis available) ──────
     if (isRedisAvailable()) {
