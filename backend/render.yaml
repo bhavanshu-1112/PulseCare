@@ -3,7 +3,7 @@ services:
     name: pulsecare-api
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --legacy-peer-deps && npm run build
     startCommand: node dist/server.js --simulate
     plan: free
     envVars:
